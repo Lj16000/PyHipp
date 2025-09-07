@@ -1,60 +1,47 @@
-#!/data/miniconda3/envs/env1/bin/python
-
+#!/usr/bin/env python3
+import sys, os
+from pathlib import Path
 from filelock import FileLock
 import hickle
-import sys
 
-# set constants
-file_path = "/data/picasso/envlist.hkl"
-lock_path = "/data/picasso/envlist.hkl.lock"
-time_out_secs = 60
+ENVLIST_PATH = Path("/data/picasso/envlist.hkl")
+LOCK_PATH = Path(str(ENVLIST_PATH) + ".lock")
 
-# program modes
-READ_MODE = 0
-WRITE_MODE = 1
-RESET_MODE = 2
+def ensure_dir():
+    ENVLIST_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-# get number of arguments
-nargs = len(sys.argv)
-if nargs > 3:
-    print('Usage: envlist; envlist env; envlist envprefix nenvs')
-    exit
-elif nargs > 2:
-    # creates or re-creates the list of environments
-    pmode = RESET_MODE
-    # get prefix for environment name
-    envprefix = sys.argv[1]
-    # get number of environments to create
-    nenvs = sys.argv[2]
-elif nargs > 1:
-    # returns env to the list of environments
-    pmode = WRITE_MODE
-    # get name of environment to return
-    env = sys.argv[1]
-else:
-    # gets name of an environment to use
-    pmode = READ_MODE
+def save_list(lst):
+    hickle.dump(lst, str(ENVLIST_PATH), mode="w")
 
-# creates a lock for the file so it can only be accessed one at a time
-lock = FileLock(lock_path, timeout=time_out_secs)
+def load_list():
+    return hickle.load(str(ENVLIST_PATH))
 
-with lock:
-    if pmode == RESET_MODE:
-        # create a list (named clist) of nevns environments with the 
-        # prefix envprefix
-        # add code here
-    else:
-        # load hickle file
-        clist = hickle.load(file_path)
-
-        if pmode == WRITE_MODE:
-            # append item to end of list
-            # add code here
-        else:    
-            # get and remove env from clist
-            # add code here
-            # return env name
+def main():
+    args = sys.argv[1:]
+    ensure_dir()
+    lock = FileLock(str(LOCK_PATH))
+    with lock:
+        if len(args) == 2:
+            prefix = args[0]
+            n = int(args[1])
+            lst = [f"{prefix}{i}" for i in range(n)]
+            save_list(lst)
+        elif len(args) == 0:
+            if not ENVLIST_PATH.exists():
+                sys.exit(1)
+            lst = load_list()
+            if not lst:
+                sys.exit(1)
+            env = lst.pop(0)
+            save_list(lst)
             print(env)
+        elif len(args) == 1:
+            env = args[0]
+            lst = load_list() if ENVLIST_PATH.exists() else []
+            lst.append(env)
+            save_list(lst)
+        else:
+            sys.exit(2)
 
-    # save hickle file
-    hickle.dump(clist, file_path, mode="w")
+if __name__ == "__main__":
+    main()
